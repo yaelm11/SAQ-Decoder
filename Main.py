@@ -169,7 +169,7 @@ def train(model, device, train_loader, optimizer, epoch, LR):
 
 ##################################################################
 
-def test(model, device, test_loader_list, ps_range_test, args, cum_count_lim=100000):
+def test(model, device, test_loader_list, ps_range_test, args, cum_count_lim=500):
     model.eval()
     test_loss_ler_logical_list, test_loss_ler_list, cum_samples_all = [], [], []
     t = time.time()
@@ -226,6 +226,9 @@ def test(model, device, test_loader_list, ps_range_test, args, cum_count_lim=100
                 ##########
                 test_ler += FER(logical_flipped(test_loader.dataset.logic_matrix, out_S), logical_flipped(test_loader.dataset.logic_matrix, z.to(device))) * z.shape[0]
                 cum_count += z.shape[0]
+                # indication of proggress in loop
+                if cum_count % 1000 == 0:
+                    print(f"Processed {cum_count}/{cum_count_lim} samples for p={ps_range_test[ii]}")
                 if cum_count > cum_count_lim:
                     break
             cum_samples_all.append(cum_count)
