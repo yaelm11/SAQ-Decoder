@@ -294,7 +294,7 @@ def main(args):
             torch.save(model, os.path.join(args.path, 'best_model'))
             logging.info('Model Saved')
         if epoch % 60 == 0 or epoch in [1, args.epochs]:
-            test(model, device, test_dataloader_list, ps_test, args)
+            test(model, device, test_dataloader_list, ps_test, args, cum_count_lim=args.test_samples_mid)
     model = torch.load(
         os.path.join(args.path, 'best_model'),
         weights_only=False  # revert to the ≤2.5 default
@@ -307,7 +307,7 @@ def main(args):
     test_dataloader_list = [DataLoader(QECC_Dataset(code, [ps_test[ii]], len=int(args.test_batch_size), args=args),
                                        batch_size=int(args.test_batch_size), shuffle=False, num_workers=args.workers)
                             for ii in range(len(ps_test))]
-    test(model, device, test_dataloader_list, ps_test, args)
+    test(model, device, test_dataloader_list, ps_test, args, cum_count_lim=args.test_samples_final)
 
 
 ##################################################################################################################
@@ -346,6 +346,12 @@ if __name__ == '__main__':
 
     # ablation args
     parser.add_argument('--no_mask', type=int, default=0)
+
+    #adding debug flags (num of error sample to determain LER)
+    parser.add_argument('--test_samples_mid', type=int, default=1000,
+                        help='Number of samples to evaluate during training epochs')
+    parser.add_argument('--test_samples_final', type=int, default=100000,
+                        help='Number of samples to evaluate in the final test')
 
     args = parser.parse_args()
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
