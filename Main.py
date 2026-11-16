@@ -256,6 +256,7 @@ def test(model, device, test_loader_list, ps_range_test, args, cum_count_lim=500
 
 def main(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    logging.info(f">>> PyTorch is using device: {device} <<<")
     args.code.logic_matrix = args.code.logic_matrix.to(device)
     args.code.pc_matrix = args.code.pc_matrix.to(device)
     code = args.code
@@ -276,38 +277,56 @@ def main(args):
 
     ps_train = ps_test
 
+    logging.info(">>> Starting Training Data Generation (CPU) ...")
     train_dataloader = DataLoader(QECC_Dataset(code, ps_train, len=args.batch_size * args.batch_num, args=args),
                                   batch_size=int(args.batch_size),
                                   shuffle=True, num_workers=args.workers)
+    logging.info(">>> Training Data Generation Complete!")
+
+    logging.info(">>> Starting Test Data Generation (CPU) ...")
+
     test_dataloader_list = [DataLoader(QECC_Dataset(code, [ps_test[ii]], len=int(args.test_batch_size), args=args),
                                        batch_size=int(args.test_batch_size), shuffle=False, num_workers=args.workers)
                             for ii in range(len(ps_test))]
+    logging.info(">>> Test Data Generation Complete!")
     #################################
     best_ler_log = float('inf')
     for epoch in range(1, args.epochs + 1):
+        logging.info(f"\n{'=' * 20} EPOCH {epoch}/{args.epochs} {'=' * 20}")
+        logging.info(f"--- Epoch {epoch}: Starting Train Phase ---")
         loss, ler_log, ler = train(model, device, train_dataloader, optimizer,
                                epoch, LR=scheduler.get_last_lr()[0])
         scheduler.step()
+        logging.info(f"--- Epoch {epoch}: Train Phase Complete ---")
         torch.save(model, os.path.join(args.path, 'last_model'))
+        logging.info(f"--- Epoch {epoch}: Best Model Saved (LER_L: {best_ler_log:.3e}) ---")
         if ler_log < best_ler_log:
             best_ler_log = ler_log
             torch.save(model, os.path.join(args.path, 'best_model'))
             logging.info('Model Saved')
         if epoch % 60 == 0 or epoch in [1, args.epochs]:
+            logging.info(f"--- Epoch {epoch}: Starting Mid-Training Test Phase ---")
             test(model, device, test_dataloader_list, ps_test, args, cum_count_lim=args.test_samples_mid)
+            logging.info(f"--- Epoch {epoch}: Mid-Training Test Phase Complete ---")
     model = torch.load(
         os.path.join(args.path, 'best_model'),
         weights_only=False  # revert to the ≤2.5 default
     ).to(device)
+    logging.info('\n>>> Best model loaded for Final Evaluation')
     logging.info('Best model loaded')
     ps_test = np.linspace(0.01, 0.2, 18)
     if args.noise_type == 'depolarization':
         ps_test = np.linspace(0.05, 0.2, 18)
     ###
+    logging.info(">>> Generating Final Test Data (CPU) ...")
     test_dataloader_list = [DataLoader(QECC_Dataset(code, [ps_test[ii]], len=int(args.test_batch_size), args=args),
                                        batch_size=int(args.test_batch_size), shuffle=False, num_workers=args.workers)
                             for ii in range(len(ps_test))]
+    logging.info(">>> Final Test Data Generation Complete!")
+
+    logging.info("========== Starting Final Test Phase ==========")
     test(model, device, test_dataloader_list, ps_test, args, cum_count_lim=args.test_samples_final)
+    logging.info("========== Script Finished Successfully ==========")
 
 
 ##################################################################################################################
@@ -354,8 +373,8 @@ if __name__ == '__main__':
                         help='Number of samples to evaluate in the final test')
 
     args = parser.parse_args()
-    os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-    os.environ["CUDA_VISIBLE_DEVICES"] = args.gpus
+    # os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+    # os.environ["CUDA_VISIBLE_DEVICES"] = args.gpus
     set_seed(args.seed)
     ####################################################################
 
